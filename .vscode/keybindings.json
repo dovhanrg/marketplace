@@ -1,0 +1,7 @@
+[
+    {
+        "key": "shift+right",
+        "command": "tab",
+        "when": "editorTextFocus"
+    }
+]
