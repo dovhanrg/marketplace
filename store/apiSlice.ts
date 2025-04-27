@@ -1,5 +1,7 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { apiUrl } from '@/constants/strings';
+import { createEntityAdapter, EntityState } from '@reduxjs/toolkit';
+import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+
 
 interface LoginRequest {
     username: string;
@@ -65,6 +67,16 @@ interface ProductsResponse {
     limit: number;
 }
 
+interface ProductsResponseWithAdapter {
+    products: EntityState<Product, number>;
+    total: number;
+    skip: number;
+    limit: number;
+}
+
+const productEntityAdapter = createEntityAdapter<Product>();
+const productEntitySelectors = productEntityAdapter.getSelectors();
+
 export const apiSlice = createApi({
     reducerPath: 'api',
     baseQuery: fetchBaseQuery({ baseUrl: apiUrl }),
@@ -78,8 +90,26 @@ export const apiSlice = createApi({
             }),
             invalidatesTags: ['Auth'],
         }),
-        getProducts: builder.query<ProductsResponse, { skip: number; limit: number }>({
+        getProducts: builder.query<ProductsResponseWithAdapter, { skip: number; limit: number }>({
             query: ({ skip, limit }) => `/products?skip=${skip}&limit=${limit}`,
+            transformResponse: (responseData: ProductsResponse) => {
+                return {
+                    ...responseData,
+                    products: productEntityAdapter.setMany(
+                        productEntityAdapter.getInitialState(),
+                        responseData.products
+                    ),
+                };
+            },
+            serializeQueryArgs: ({ endpointName }) => endpointName,
+            merge(currentCacheData, responseData) {
+                productEntityAdapter.addMany(
+                    currentCacheData.products, productEntitySelectors.selectAll(responseData.products),
+                );
+            },
+            forceRefetch: ({ currentArg, previousArg }) => {
+                return currentArg?.skip !== previousArg?.skip;
+            },
             providesTags: ['Product'],
         }),
         getProduct: builder.query<Product, number>({
@@ -92,5 +122,10 @@ export const apiSlice = createApi({
 export const {
     useLoginMutation,
     useGetProductsQuery,
-    useGetProductQuery
-} = apiSlice; 
+    useGetProductQuery,
+} = apiSlice;
+
+export {
+    productEntityAdapter,
+    productEntitySelectors
+};
